@@ -1,0 +1,51 @@
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.env
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# Explicitly allow safe examples
+!.env.example
+!*.env.example
+!backend/.env.example
+
+# Python & Virtual Environments
+venv/
+.venv/
+env/
+backend/venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+backend/**/__pycache__/
+
+# Testing & Coverage
+.pytest_cache/
+backend/.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# OS & Editor Files
+.DS_Store
+backend/.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary & SQLite files
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+scratch/
+
+# Build & Dist
+dist/
+build/
+*.egg-info/
