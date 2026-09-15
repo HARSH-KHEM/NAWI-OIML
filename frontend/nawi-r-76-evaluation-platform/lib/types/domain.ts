@@ -226,3 +226,54 @@ export interface TraceRecord {
     serial_number: string
   }
 }
+
+export interface InstrumentCreate {
+  manufacturer: string
+  model_name: string
+  instrument_family?: string
+  serial_number: string
+  status?: InstrumentStatus
+  is_synthetic?: boolean
+}
+
+export interface InstrumentConfigurationCreate {
+  accuracy_class: AccuracyClass
+  max_capacity: string | number
+  min_capacity: string | number
+  verification_scale_interval: string | number
+  actual_scale_interval: string | number
+  unit?: string
+  number_of_ranges?: number
+  is_multiple_range?: boolean
+  tare_type?: TareType
+  is_electronic?: boolean
+  has_zero_setting?: boolean
+  extra_capabilities?: Record<string, any>
+  ranges?: Array<{
+    range_index: number
+    min_capacity: string | number
+    max_capacity: string | number
+    verification_scale_interval: string | number
+    actual_scale_interval: string | number
+    unit?: string
+  }>
+}
+
+export interface EvaluationCreate {
+  instrument_configuration_id?: string
+  rule_version_id?: string
+  evaluation_number?: string
+  lab_name?: string
+  operator_id?: string
+}
+
+export interface EvaluationPlanResponse {
+  evaluation_id: string
+  evaluation_number: string
+  status: EvaluationStatus
+  configuration_snapshot: ConfigurationSnapshot
+  tests: EvaluationTestRead[]
+  total_tests: number
+  applicable_tests_count: number
+}
+

@@ -1,27 +1,46 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
+  AlertCircle,
   ArrowRight,
   Check,
+  ChevronDown,
   Gauge,
   Info,
+  Layers,
+  Plus,
+  RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Pipeline } from '@/components/layout/pipeline'
+import { InstrumentRead, AccuracyClass, TareType } from '@/lib/types/domain'
+import {
+  getInstruments,
+  createEvaluation,
+  generateEvaluationPlan,
+} from '@/lib/api/services'
 
-export default function NewEvaluationPage() {
+function NewEvaluationForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialInstrumentId = searchParams.get('instrumentId')
 
-  // Form states matching backend InstrumentConfiguration model
+  const [instruments, setInstruments] = useState<InstrumentRead[]>([])
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>(initialInstrumentId || '')
+  const [loadingInstruments, setLoadingInstruments] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Form states matching backend InstrumentConfiguration snapshot
   const [modelName, setModelName] = useState('ABC-300 Bench Scale')
   const [serialNumber, setSerialNumber] = useState('SYNTH-DEMO-NAWI-001-SN')
-  const [accuracyClass, setAccuracyClass] = useState<'CLASS_I' | 'CLASS_II' | 'CLASS_III' | 'CLASS_IIII'>('CLASS_III')
+  const [manufacturer, setManufacturer] = useState('Global Bench Metrology Systems')
+  const [accuracyClass, setAccuracyClass] = useState<AccuracyClass>('CLASS_III')
   const [maxCapacity, setMaxCapacity] = useState('30.000')
   const [minCapacity, setMinCapacity] = useState('0.200')
   const [eInterval, setEInterval] = useState('0.010')
@@ -30,13 +49,77 @@ export default function NewEvaluationPage() {
   const [isMultipleRange, setIsMultipleRange] = useState(false)
   const [hasTare, setHasTare] = useState(true)
   const [hasZero, setHasZero] = useState(true)
-  const [supportCount, setSupportCount] = useState(4)
+  const [supportCount, setSupportCount] = useState<number>(4)
+  const [labName, setLabName] = useState('National Metrology Institute — Legal Verification Lab')
   const [ruleVersion, setRuleVersion] = useState('2006-01')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function load() {
+      setLoadingInstruments(true)
+      const list = await getInstruments()
+      setInstruments(list)
+      if (list.length > 0) {
+        const preselected = initialInstrumentId
+          ? list.find((i) => i.id === initialInstrumentId) || list[0]
+          : list[0]
+        applyInstrument(preselected)
+      }
+      setLoadingInstruments(false)
+    }
+    load()
+  }, [initialInstrumentId])
+
+  function applyInstrument(inst: InstrumentRead) {
+    setSelectedInstrumentId(inst.id)
+    setModelName(inst.model_name)
+    setSerialNumber(inst.serial_number)
+    setManufacturer(inst.manufacturer)
+
+    const cfg = inst.configurations?.[0]
+    if (cfg) {
+      setAccuracyClass(cfg.accuracy_class)
+      setMaxCapacity(String(cfg.max_capacity))
+      setMinCapacity(String(cfg.min_capacity))
+      setEInterval(String(cfg.verification_scale_interval))
+      setDInterval(String(cfg.actual_scale_interval))
+      setUnit(cfg.unit || 'kg')
+      setIsMultipleRange(cfg.is_multiple_range)
+      setHasTare(cfg.tare_type !== 'NONE')
+      setHasZero(cfg.has_zero_setting)
+      const sc = cfg.extra_capabilities?.load_receptor?.support_count
+      if (sc) setSupportCount(sc)
+    }
+  }
+
+  const handleInstrumentSelect = (id: string) => {
+    const found = instruments.find((i) => i.id === id)
+    if (found) {
+      applyInstrument(found)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Redirect to the evaluation overview hub with the simulated/live record
-    router.push('/evaluations/EV-2026-001')
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      // 1. Initialize Evaluation & Freeze Immutable Snapshot
+      const evaluation = await createEvaluation(selectedInstrumentId || 'inst-001', {
+        lab_name: labName,
+        rule_version_id: ruleVersion,
+      })
+
+      // 2. Generate Plan deterministically from the snapshot
+      await generateEvaluationPlan(evaluation.id)
+
+      // 3. Navigate to the evaluation configuration overview
+      router.push(`/evaluations/${evaluation.id}/configuration`)
+    } catch (err: any) {
+      console.error('Evaluation creation error:', err)
+      setError(err.message || 'Failed to initialize evaluation.')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -49,13 +132,32 @@ export default function NewEvaluationPage() {
           <div className="eyebrow">
             <span>01</span>Instrument Specification & Evaluation Launch
           </div>
-          <h1>Configure Instrument</h1>
+          <h1>Initialize Type Evaluation</h1>
           <p>
-            The metrological specification entered here determines test applicability under OIML R 76.
-            Upon initialization, this configuration is captured as an immutable snapshot for audit integrity.
+            Select a registered instrument from the catalog. The metrological specification below determines
+            OIML R 76 test applicability and will be permanently captured as an immutable configuration snapshot.
           </p>
         </div>
       </div>
+
+      {error && (
+        <div
+          className="panel"
+          style={{
+            padding: '16px 20px',
+            marginBottom: '24px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            borderColor: 'rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <AlertCircle style={{ width: '18px', flexShrink: 0 }} />
+          <span style={{ fontSize: '12px' }}>{error}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="config-layout">
@@ -63,16 +165,45 @@ export default function NewEvaluationPage() {
           <div className="panel config-form">
             <div className="panel-heading">
               <div>
-                <span className="eyebrow">Instrument Identity</span>
-                <h2>Identification & Verification Plate</h2>
+                <span className="eyebrow">Instrument Selection</span>
+                <h2>Choose Registered NAWI</h2>
               </div>
-              <Badge tone="lime">Synthetic Demonstration</Badge>
+              <Link href="/instruments/new" className="button button-outline" style={{ fontSize: '11px' }}>
+                <Plus style={{ width: '12px' }} /> Register new instrument
+              </Link>
+            </div>
+
+            {/* Instrument Selector Dropdown */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '11px', color: 'var(--dim)', marginBottom: '6px' }}>
+                Registered Instrument
+              </label>
+              <select
+                value={selectedInstrumentId}
+                onChange={(e) => handleInstrumentSelect(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: '#0d110f',
+                  border: '1px solid var(--line)',
+                  borderRadius: '6px',
+                  color: 'var(--ink)',
+                  fontSize: '12px',
+                  padding: '10px 14px',
+                  outline: 0,
+                }}
+              >
+                {instruments.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.model_name} (SN: {i.serial_number}) — {i.manufacturer}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="field-grid">
               <label>
                 Manufacturer
-                <input defaultValue="[SYNTHETIC] Global Bench Metrology Systems" readOnly />
+                <input value={manufacturer} readOnly />
               </label>
               <label>
                 Model Name / Designation
@@ -93,10 +224,13 @@ export default function NewEvaluationPage() {
                 />
               </label>
               <label>
-                Governing Rule Version
-                <select value={ruleVersion} onChange={(e) => setRuleVersion(e.target.value)}>
-                  <option value="2006-01">OIML R 76-1: 2006 (E) · Active Standard</option>
-                </select>
+                Testing Laboratory
+                <input
+                  value={labName}
+                  onChange={(e) => setLabName(e.target.value)}
+                  placeholder="e.g. Legal Metrology Laboratory"
+                  required
+                />
               </label>
             </div>
 
@@ -263,7 +397,7 @@ export default function NewEvaluationPage() {
 
             <div className="ready-stat">
               <span>Selected Standard</span>
-              <strong>OIML R 76-1:2006</strong>
+              <strong>OIML R 76-1:2006 (E)</strong>
             </div>
             <div className="ready-stat">
               <span>Accuracy Class</span>
@@ -293,13 +427,36 @@ export default function NewEvaluationPage() {
             <button
               type="submit"
               className="button"
-              style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '12px' }}
+              disabled={submitting}
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                padding: '14px',
+                fontSize: '12px',
+                opacity: submitting ? 0.7 : 1,
+              }}
             >
-              Initialize evaluation & freeze snapshot <ArrowRight />
+              {submitting ? 'Freezing Snapshot & Generating Plan...' : 'Initialize evaluation & freeze snapshot'}{' '}
+              <ArrowRight style={{ width: '13px' }} />
             </button>
           </aside>
         </div>
       </form>
     </div>
+  )
+}
+
+export default function NewEvaluationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="content" style={{ maxWidth: '1480px', margin: '0 auto', padding: '60px 42px', textAlign: 'center' }}>
+          <RefreshCw className="animate-spin" style={{ width: '24px', margin: '0 auto 12px', color: 'var(--lime)' }} />
+          <p style={{ color: 'var(--muted)', fontSize: '12px' }}>Loading evaluation form...</p>
+        </div>
+      }
+    >
+      <NewEvaluationForm />
+    </Suspense>
   )
 }

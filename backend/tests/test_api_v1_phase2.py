@@ -82,6 +82,13 @@ def test_full_api_evaluation_workflow(client: TestClient, test_setup):
     assert config_resp.status_code == 201, config_resp.text
     config_id = config_resp.json()["id"]
 
+    # 2b. Verify listing configurations for instrument
+    list_configs_resp = client.get(f"/api/v1/instruments/{inst_id}/configurations")
+    assert list_configs_resp.status_code == 200
+    configs_data = list_configs_resp.json()
+    assert len(configs_data) == 1
+    assert configs_data[0]["id"] == config_id
+
     # 3. Create Evaluation
     eval_resp = client.post(
         f"/api/v1/instruments/{inst_id}/evaluations",
@@ -94,6 +101,12 @@ def test_full_api_evaluation_workflow(client: TestClient, test_setup):
     eval_data = eval_resp.json()
     eval_id = eval_data["id"]
     assert Decimal(eval_data["configuration_snapshot"]["max_capacity"]) == Decimal("30.000")
+
+    # 3b. Verify listing evaluations
+    list_evals_resp = client.get("/api/v1/evaluations")
+    assert list_evals_resp.status_code == 200
+    evals_list = list_evals_resp.json()
+    assert any(e["id"] == eval_id for e in evals_list)
 
     # 4. Generate Test Plan
     plan_resp = client.post(f"/api/v1/evaluations/{eval_id}/generate-plan")

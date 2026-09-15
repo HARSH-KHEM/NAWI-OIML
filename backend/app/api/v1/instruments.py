@@ -140,6 +140,25 @@ def create_configuration(
 
 
 @router.get(
+    "/instruments/{instrument_id}/configurations",
+    response_model=List[InstrumentConfigurationRead],
+)
+def list_configurations(
+    instrument_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> List[InstrumentConfiguration]:
+    """List all configurations for a given instrument."""
+    inst = db.get(Instrument, instrument_id)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    return db.scalars(
+        select(InstrumentConfiguration)
+        .where(InstrumentConfiguration.instrument_id == instrument_id)
+        .order_by(InstrumentConfiguration.created_at.desc())
+    ).all()
+
+
+@router.get(
     "/instruments/{instrument_id}/configurations/{configuration_id}",
     response_model=InstrumentConfigurationRead,
 )
@@ -158,3 +177,4 @@ def get_configuration(
     if not config:
         raise HTTPException(status_code=404, detail="Configuration not found")
     return config
+

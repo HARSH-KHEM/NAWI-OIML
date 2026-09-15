@@ -128,6 +128,21 @@ def create_evaluation(
     return eval_record
 
 
+@router.get("/evaluations", response_model=List[EvaluationRead])
+def list_evaluations(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+) -> List[Evaluation]:
+    """List all evaluations in reverse chronological order."""
+    return db.scalars(
+        select(Evaluation)
+        .order_by(Evaluation.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    ).all()
+
+
 @router.get("/evaluations/{evaluation_id}", response_model=EvaluationRead)
 def get_evaluation(
     evaluation_id: uuid.UUID,
