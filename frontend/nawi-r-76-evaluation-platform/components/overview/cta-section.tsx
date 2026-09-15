@@ -1,15 +1,66 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, FileCheck2, ShieldCheck, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 export function CtaSection() {
+  const containerRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: 'top 80%',
+        },
+        defaults: { ease: 'power3.out' },
+      })
+
+      tl.from('.report-sheet', {
+        opacity: 0,
+        y: 28,
+        duration: 0.65,
+      })
+        .from(
+          '.report-side',
+          {
+            opacity: 0,
+            x: 20,
+            duration: 0.55,
+          },
+          '-=0.4'
+        )
+        .from(
+          '.report-item',
+          {
+            opacity: 0,
+            y: 8,
+            stagger: 0.07,
+            duration: 0.35,
+          },
+          '-=0.2'
+        )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="overview-section" id="report-cta">
+    <section className="overview-section" id="report-cta" ref={containerRef}>
       <div className="section-overline">
-        06 · Complete Report Package <span>STANDARDIZED OIML R-76 REPORT</span>
+        07 · Complete Report Package <span>STANDARDIZED OIML R-76 REPORT</span>
       </div>
 
       <div className="report-layout">

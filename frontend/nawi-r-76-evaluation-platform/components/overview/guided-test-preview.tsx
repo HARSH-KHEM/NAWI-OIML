@@ -1,15 +1,74 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, Play, TestTube2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 export function GuidedTestPreview() {
+  const containerRef = useRef<HTMLElement | null>(null)
   const [observedIndication, setObservedIndication] = useState('100.021')
 
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: 'top 80%',
+        },
+        defaults: { ease: 'power3.out' },
+      })
+
+      tl.from('.test-rail', {
+        opacity: 0,
+        x: -24,
+        duration: 0.6,
+      })
+        .from(
+          '.test-panel',
+          {
+            opacity: 0,
+            x: 24,
+            duration: 0.6,
+          },
+          '-=0.4'
+        )
+        .from(
+          '.observation-field',
+          {
+            opacity: 0,
+            y: 16,
+            stagger: 0.1,
+            duration: 0.4,
+          },
+          '-=0.2'
+        )
+        .from(
+          '.validation-note',
+          {
+            opacity: 0,
+            y: 10,
+            duration: 0.4,
+          },
+          '-=0.1'
+        )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="overview-section" id="guided-testing">
+    <section className="overview-section" id="guided-testing" ref={containerRef}>
       <div className="section-overline">
         04 · Guided Laboratory Execution <span>OPERATOR WORKSPACE</span>
       </div>

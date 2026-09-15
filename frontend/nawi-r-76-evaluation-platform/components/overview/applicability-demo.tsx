@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -13,10 +13,18 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { CANONICAL_PROCEDURES } from '@/lib/mock-data'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 type RangeMode = 'single' | 'multiple'
 
 export function ApplicabilityDemo() {
+  const containerRef = useRef<HTMLElement | null>(null)
+  const impactCountRef = useRef<HTMLElement | null>(null)
   const [rangeMode, setRangeMode] = useState<RangeMode>('multiple')
   const [activeWhyId, setActiveWhyId] = useState<string | null>(null)
 
@@ -30,8 +38,85 @@ export function ApplicabilityDemo() {
 
   const totalProcedures = CANONICAL_PROCEDURES.length
 
+  // Initial scroll-triggered reveal
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: 'top 80%',
+        },
+        defaults: { ease: 'power3.out' },
+      })
+
+      tl.from('.instrument-strip', {
+        opacity: 0,
+        y: 20,
+        duration: 0.6,
+      })
+        .from(
+          '.config-form',
+          {
+            opacity: 0,
+            x: -24,
+            duration: 0.6,
+          },
+          '-=0.3'
+        )
+        .from(
+          '.impact-panel',
+          {
+            opacity: 0,
+            x: 24,
+            duration: 0.6,
+          },
+          '-=0.4'
+        )
+        .from(
+          '.procedure',
+          {
+            opacity: 0,
+            y: 12,
+            stagger: 0.05,
+            duration: 0.4,
+          },
+          '-=0.2'
+        )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
+  // Animate procedure list when mode toggles
+  const handleRangeChange = (mode: RangeMode) => {
+    if (mode === rangeMode) return
+    setRangeMode(mode)
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    // Quick subtle pulse on impact count & new procedures
+    if (impactCountRef.current) {
+      gsap.fromTo(
+        impactCountRef.current,
+        { scale: 1.15, color: '#ffffff' },
+        { scale: 1, color: 'var(--lime)', duration: 0.4, ease: 'power2.out' }
+      )
+    }
+
+    gsap.fromTo(
+      '.procedure',
+      { opacity: 0.5, y: 4 },
+      { opacity: 1, y: 0, stagger: 0.04, duration: 0.3, ease: 'power2.out' }
+    )
+  }
+
   return (
-    <section className="overview-section" id="applicability-engine">
+    <section className="overview-section" id="applicability-engine" ref={containerRef}>
       <div className="section-overline">
         02 · Deterministic Applicability Engine <span>USP INTERACTION</span>
       </div>
@@ -133,16 +218,18 @@ export function ApplicabilityDemo() {
             </div>
             <div className="segmented" role="radiogroup" aria-label="Multiple Range Selection">
               <button
+                type="button"
                 className={rangeMode === 'single' ? 'selected' : ''}
-                onClick={() => setRangeMode('single')}
+                onClick={() => handleRangeChange('single')}
                 role="radio"
                 aria-checked={rangeMode === 'single'}
               >
                 Off (Single)
               </button>
               <button
+                type="button"
                 className={rangeMode === 'multiple' ? 'selected' : ''}
-                onClick={() => setRangeMode('multiple')}
+                onClick={() => handleRangeChange('multiple')}
                 role="radio"
                 aria-checked={rangeMode === 'multiple'}
               >
@@ -187,7 +274,9 @@ export function ApplicabilityDemo() {
           </div>
 
           <div className="impact-count">
-            <strong>{String(applicableProcedures.length).padStart(2, '0')}</strong>
+            <strong ref={impactCountRef as any}>
+              {String(applicableProcedures.length).padStart(2, '0')}
+            </strong>
             <div>
               <span>applicable procedures</span>
               <small>

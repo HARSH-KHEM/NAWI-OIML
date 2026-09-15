@@ -1,11 +1,19 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, GitBranch, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 export function JourneySummary() {
+  const containerRef = useRef<HTMLElement | null>(null)
+
   const steps = [
     { num: '01', title: 'Configure', desc: 'Define metrological capacity' },
     { num: '02', title: 'Applicability', desc: 'Resolve active R-76 rules' },
@@ -16,8 +24,44 @@ export function JourneySummary() {
     { num: '07', title: 'Report', desc: 'Publish certified report' },
   ]
 
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      // Flow line reveal
+      gsap.from('.flow-item', {
+        scrollTrigger: {
+          trigger: '.flow-line',
+          start: 'top 85%',
+        },
+        opacity: 0,
+        x: -16,
+        stagger: 0.08,
+        duration: 0.5,
+        ease: 'power2.out',
+      })
+
+      // Editorial cards reveal
+      gsap.from('.evaluation-card', {
+        scrollTrigger: {
+          trigger: '.editorial-grid',
+          start: 'top 85%',
+        },
+        opacity: 0,
+        y: 28,
+        stagger: 0.12,
+        duration: 0.6,
+        ease: 'power3.out',
+      })
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="overview-flow">
+    <section className="overview-flow" ref={containerRef}>
       <div className="section-overline">
         The Evaluation Pipeline <span>01—07 SEQUENTIAL WORKFLOW</span>
       </div>
@@ -45,7 +89,11 @@ export function JourneySummary() {
             <br />
             Class III · 30.000 kg capacity · e = 10 g
           </p>
-          <Link href="/evaluations/EV-2026-001" className="button" style={{ color: 'var(--black)', background: '#0b0d0c15', border: '1px solid #0b0d0c30' }}>
+          <Link
+            href="/evaluations/EV-2026-001"
+            className="button"
+            style={{ color: 'var(--black)', background: '#0b0d0c15', border: '1px solid #0b0d0c30' }}
+          >
             Resume evaluation workspace <ArrowRight />
           </Link>
           <div className="card-foot">
@@ -79,7 +127,18 @@ export function JourneySummary() {
             <br />
             ready for auditor inspection.
           </p>
-          <Link href="/evaluations/EV-2026-001/evidence" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--lime)', marginTop: 'auto', fontSize: '11px', fontWeight: 700 }}>
+          <Link
+            href="/evaluations/EV-2026-001/evidence"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              color: 'var(--lime)',
+              marginTop: 'auto',
+              fontSize: '11px',
+              fontWeight: 700,
+            }}
+          >
             Inspect trace chain <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>

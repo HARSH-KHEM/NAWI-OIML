@@ -1,9 +1,15 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, ChevronDown, FileCheck2, GitBranch, Upload } from 'lucide-react'
+import { Check, ChevronDown, FileCheck2, GitBranch } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 interface EvidenceNode {
   num: string
@@ -39,18 +45,24 @@ const EVIDENCE_NODES: EvidenceNode[] = [
   },
   {
     num: '04',
-    title: 'Test Procedure Instance',
-    detail: 'Clause A.4.4.3 · Weighing Performance Intrinsic Error Test.',
-    proof: 'Sequence #10 · Attempt #1 · Execution ID: att-8f92a10c · Scope: Instrument',
+    title: 'Test Attempt Record',
+    detail: 'Attempt 01 executed. No overwrite of historical loading data.',
+    proof: 'Attempt #1 · Status: COMPLETED · Non-destructive audit history preserved',
   },
   {
     num: '05',
+    title: 'Test Procedure Instance',
+    detail: 'Clause A.4.4 · Weighing Performance Intrinsic Error Test.',
+    proof: 'Sequence #10 · Scope: Instrument · Governing Clause: A.4.4',
+  },
+  {
+    num: '06',
     title: 'Frozen Configuration Snapshot',
     detail: 'Immutable snapshot captured at evaluation initialization.',
     proof: 'Max: 30.000 kg, Min: 0.200 kg, e: 0.010 kg, Subtractive Tare, Electronic: true',
   },
   {
-    num: '06',
+    num: '07',
     title: 'Standard Rule Version',
     detail: 'OIML R 76-1:2006 (E) · RuleVersion ID 2006-01 (Active).',
     proof: 'Deterministic AST hash: sha256:7f3b89e21... · Failsafe closed dispatch',
@@ -58,18 +70,53 @@ const EVIDENCE_NODES: EvidenceNode[] = [
 ]
 
 export function EvidenceChainPreview() {
+  const containerRef = useRef<HTMLElement | null>(null)
   const [openedNode, setOpenedNode] = useState<number | null>(0)
 
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: 'top 75%',
+        },
+        defaults: { ease: 'power3.out' },
+      })
+
+      tl.from('.evidence-head', {
+        opacity: 0,
+        y: 16,
+        duration: 0.5,
+      }).from(
+        '.evidence-node',
+        {
+          opacity: 0,
+          y: 20,
+          stagger: 0.09, // Progressive sequential reveal of the 8-tier chain
+          duration: 0.45,
+          ease: 'power2.out',
+        },
+        '-=0.2'
+      )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="overview-section" id="evidence-traceability">
+    <section className="overview-section" id="evidence-traceability" ref={containerRef}>
       <div className="section-overline">
-        05 · Evidence Graph <span>FULL REGULATORY TRACEABILITY</span>
+        06 · Evidence Graph <span>FULL REGULATORY TRACEABILITY</span>
       </div>
 
       <div className="page-header" style={{ marginBottom: '24px' }}>
         <div>
           <div className="eyebrow">
-            <span>05</span>Every Decision Has An Unbroken Audit Trail
+            <span>06</span>Every Decision Has An Unbroken Audit Trail
           </div>
           <h2 style={{ margin: '8px 0', fontSize: 'clamp(28px, 4vw, 48px)', letterSpacing: '-0.05em' }}>
             From final PASS back to the governing clause.

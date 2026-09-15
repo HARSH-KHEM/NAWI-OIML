@@ -1,12 +1,71 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowDownRight, ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowDownRight, ArrowRight } from 'lucide-react'
+import gsap from 'gsap'
 
 export function HeroSection() {
+  const containerRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
+
+      tl.from('.hero-kicker', {
+        opacity: 0,
+        y: 12,
+        duration: 0.6,
+      })
+        .from(
+          '.hero h1',
+          {
+            opacity: 0,
+            y: 24,
+            duration: 0.8,
+          },
+          '-=0.3'
+        )
+        .from(
+          '.hero p',
+          {
+            opacity: 0,
+            y: 16,
+            duration: 0.6,
+          },
+          '-=0.4'
+        )
+        .from(
+          '.hero-actions .button',
+          {
+            opacity: 0,
+            y: 12,
+            stagger: 0.1,
+            duration: 0.5,
+          },
+          '-=0.3'
+        )
+        .from(
+          '.hero-meta span',
+          {
+            opacity: 0,
+            y: 10,
+            stagger: 0.08,
+            duration: 0.4,
+          },
+          '-=0.2'
+        )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="hero">
+    <section className="hero" ref={containerRef}>
       <div className="hero-kicker">
         <span className="live-dot" /> Configuration-Driven Legal Metrology Engine
       </div>

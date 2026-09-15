@@ -1,16 +1,76 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, ChevronRight, Play, TestTube2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { CANONICAL_PROCEDURES } from '@/lib/mock-data'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
 
 export function TestPlanPreview() {
+  const containerRef = useRef<HTMLElement | null>(null)
   const planItems = CANONICAL_PROCEDURES.filter((p) => p.status === 'IMPLEMENTED').slice(0, 4)
 
+  useEffect(() => {
+    if (!containerRef.current) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: 'top 80%',
+        },
+        defaults: { ease: 'power3.out' },
+      })
+
+      tl.from('.plan-panel', {
+        opacity: 0,
+        y: 20,
+        duration: 0.6,
+      })
+        .from(
+          '.plan-item',
+          {
+            opacity: 0,
+            x: -20,
+            stagger: 0.08,
+            duration: 0.4,
+          },
+          '-=0.3'
+        )
+        .from(
+          '.readiness-panel',
+          {
+            opacity: 0,
+            x: 20,
+            duration: 0.6,
+          },
+          '-=0.5'
+        )
+        .from(
+          '.ready-row',
+          {
+            opacity: 0,
+            y: 8,
+            stagger: 0.06,
+            duration: 0.35,
+          },
+          '-=0.3'
+        )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
+
   return (
-    <section className="overview-section" id="test-plan">
+    <section className="overview-section" id="test-plan" ref={containerRef}>
       <div className="section-overline">
         03 · Execution Plan <span>DERIVED DIRECTLY FROM THE SPECIFICATION</span>
       </div>
@@ -106,7 +166,11 @@ export function TestPlanPreview() {
             <strong>OIML R 76 Class III</strong>
           </div>
 
-          <Link href="/evaluations/EV-2026-001/tests/test-wp-01" className="button" style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}>
+          <Link
+            href="/evaluations/EV-2026-001/tests/test-wp-01"
+            className="button"
+            style={{ width: '100%', justifyContent: 'center', marginTop: '16px' }}
+          >
             Start guided test <Play />
           </Link>
         </aside>
