@@ -14,6 +14,12 @@ import {
   EvaluationCreate,
   EvaluationPlanResponse,
   EvaluationTestRead,
+  TestAttemptRead,
+  ObservationRead,
+  CalculationRead,
+  ComplianceResultRead,
+  EvaluationReportRead,
+  TestDefinitionRead,
 } from '@/lib/types/domain'
 import { MOCK_INSTRUMENTS, MOCK_EVALUATIONS } from '@/lib/mock-data'
 
@@ -352,3 +358,121 @@ export async function getEvaluationTests(evaluationId: string): Promise<Evaluati
     return []
   }
 }
+
+/**
+ * Fetch single evaluation test details, including attempts and steps.
+ */
+export async function getEvaluationTest(testId: string): Promise<EvaluationTestRead | null> {
+  try {
+    return await apiClient<EvaluationTestRead>(`/evaluation-tests/${testId}`)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Fetch single test attempt details.
+ */
+export async function getTestAttempt(attemptId: string): Promise<TestAttemptRead | null> {
+  try {
+    return await apiClient<TestAttemptRead>(`/test-attempts/${attemptId}`)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Submit raw physical measurement observation for a test attempt.
+ */
+export async function submitObservation(
+  attemptId: string,
+  payload: {
+    observation_code: string
+    value_numeric?: string | number
+    value_text?: string
+    unit?: string
+    test_step_id?: string
+    notes?: string
+  }
+): Promise<ObservationRead> {
+  return await apiClient<ObservationRead>(`/test-attempts/${attemptId}/observations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/**
+ * Trigger authoritative calculation and compliance decision for an attempt.
+ */
+export async function executeCalculation(attemptId: string): Promise<any> {
+  return await apiClient<any>(`/test-attempts/${attemptId}/calculate`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * Fetch latest compliance result for an attempt.
+ */
+export async function getComplianceResult(attemptId: string): Promise<ComplianceResultRead | null> {
+  try {
+    return await apiClient<ComplianceResultRead>(`/test-attempts/${attemptId}/result`)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Create a new retest attempt (Attempt N+1) preserving previous attempt history.
+ */
+export async function createRetest(testId: string, notes?: string): Promise<TestAttemptRead> {
+  return await apiClient<TestAttemptRead>(`/evaluation-tests/${testId}/attempts`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  })
+}
+
+/**
+ * Retrieve the complete 8-tier audit traceability chain for an attempt.
+ */
+export async function getTestTrace(attemptId: string): Promise<any | null> {
+  try {
+    return await apiClient<any>(`/test-attempts/${attemptId}/trace`)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Retrieve all evidence artifacts attached to an evaluation.
+ */
+export async function getEvaluationEvidence(evaluationId: string): Promise<any[]> {
+  try {
+    return await apiClient<any[]>(`/evaluations/${evaluationId}/evidence`)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Fetch authoritative OIML R-76 technical evaluation report.
+ */
+export async function getEvaluationReport(evaluationId: string): Promise<EvaluationReportRead | null> {
+  try {
+    return await apiClient<EvaluationReportRead>(`/evaluations/${evaluationId}/report`)
+  } catch (err) {
+    console.warn('API getEvaluationReport fallback:', err)
+    return null
+  }
+}
+
+/**
+ * Retrieve master catalog of R-76 test definitions.
+ */
+export async function getTestDefinitions(): Promise<TestDefinitionRead[]> {
+  try {
+    return await apiClient<TestDefinitionRead[]>('/test-definitions')
+  } catch {
+    return []
+  }
+}
+

@@ -29,9 +29,11 @@ function NewEvaluationForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialInstrumentId = searchParams.get('instrumentId')
+  const initialConfigId = searchParams.get('configId')
 
   const [instruments, setInstruments] = useState<InstrumentRead[]>([])
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>(initialInstrumentId || '')
+  const [selectedConfigId, setSelectedConfigId] = useState<string>(initialConfigId || '')
   const [loadingInstruments, setLoadingInstruments] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,21 +64,25 @@ function NewEvaluationForm() {
         const preselected = initialInstrumentId
           ? list.find((i) => i.id === initialInstrumentId) || list[0]
           : list[0]
-        applyInstrument(preselected)
+        applyInstrument(preselected, initialConfigId || undefined)
       }
       setLoadingInstruments(false)
     }
     load()
-  }, [initialInstrumentId])
+  }, [initialInstrumentId, initialConfigId])
 
-  function applyInstrument(inst: InstrumentRead) {
+  function applyInstrument(inst: InstrumentRead, targetConfigId?: string) {
     setSelectedInstrumentId(inst.id)
     setModelName(inst.model_name)
     setSerialNumber(inst.serial_number)
     setManufacturer(inst.manufacturer)
 
-    const cfg = inst.configurations?.[0]
+    const cfg = targetConfigId
+      ? inst.configurations?.find((c) => c.id === targetConfigId) || inst.configurations?.[0]
+      : inst.configurations?.[0]
+
     if (cfg) {
+      setSelectedConfigId(cfg.id)
       setAccuracyClass(cfg.accuracy_class)
       setMaxCapacity(String(cfg.max_capacity))
       setMinCapacity(String(cfg.min_capacity))
@@ -98,6 +104,13 @@ function NewEvaluationForm() {
     }
   }
 
+  const handleConfigSelect = (cfgId: string) => {
+    const inst = instruments.find((i) => i.id === selectedInstrumentId)
+    if (inst) {
+      applyInstrument(inst, cfgId)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -106,6 +119,7 @@ function NewEvaluationForm() {
     try {
       // 1. Initialize Evaluation & Freeze Immutable Snapshot
       const evaluation = await createEvaluation(selectedInstrumentId || 'inst-001', {
+        instrument_configuration_id: selectedConfigId || undefined,
         lab_name: labName,
         rule_version_id: ruleVersion,
       })
@@ -199,6 +213,41 @@ function NewEvaluationForm() {
                 ))}
               </select>
             </div>
+
+            {/* Version picker if multiple configs exist */}
+            {(() => {
+              const currentInst = instruments.find((i) => i.id === selectedInstrumentId)
+              if (currentInst && currentInst.configurations && currentInst.configurations.length > 1) {
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--lime)', marginBottom: '6px', fontWeight: 600 }}>
+                      Select Metrological Configuration Version
+                    </label>
+                    <select
+                      value={selectedConfigId}
+                      onChange={(e) => handleConfigSelect(e.target.value)}
+                      style={{
+                        width: '100%',
+                        background: '#0d110f',
+                        border: '1px solid #536b32',
+                        borderRadius: '6px',
+                        color: 'var(--ink)',
+                        fontSize: '12px',
+                        padding: '10px 14px',
+                        outline: 0,
+                      }}
+                    >
+                      {currentInst.configurations.map((cfg) => (
+                        <option key={cfg.id} value={cfg.id}>
+                          Configuration #{cfg.id.slice(0, 8)}: Max {cfg.max_capacity} {cfg.unit}, e={cfg.verification_scale_interval} {cfg.unit} ({cfg.is_multiple_range ? 'Multiple Range' : 'Single Range'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              }
+              return null
+            })()}
 
             <div className="field-grid">
               <label>

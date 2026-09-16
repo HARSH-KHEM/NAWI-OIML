@@ -1,12 +1,15 @@
 """Evaluation Tests and retesting REST API endpoints."""
 
-from typing import Optional
+from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.test_definition import TestDefinition
 from app.models.test_execution import EvaluationTest
+from app.schemas.test_definition import TestDefinitionRead
 from app.schemas.test_execution import (
     EvaluationTestRead,
     TestAttemptCreate,
@@ -104,3 +107,12 @@ def create_retest(
         notes=new_attempt.notes,
         steps=steps_data,
     )
+
+
+@router.get("/test-definitions", response_model=List[TestDefinitionRead])
+def list_test_definitions(
+    db: Session = Depends(get_db),
+) -> List[TestDefinition]:
+    """Retrieve canonical R-76 test definitions catalog."""
+    return db.scalars(select(TestDefinition).order_by(TestDefinition.sequence)).all()
+

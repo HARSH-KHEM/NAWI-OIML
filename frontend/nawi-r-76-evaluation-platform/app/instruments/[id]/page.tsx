@@ -19,8 +19,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { InstrumentRead, InstrumentConfigurationRead } from '@/lib/types/domain'
-import { getInstrument } from '@/lib/api/services'
+import { InstrumentRead, InstrumentConfigurationRead, AccuracyClass, TareType } from '@/lib/types/domain'
+import { getInstrument, createInstrumentConfiguration } from '@/lib/api/services'
+import { formatDateSafe } from '@/lib/utils'
 
 export default function InstrumentDetailPage() {
   const params = useParams()
@@ -28,17 +29,106 @@ export default function InstrumentDetailPage() {
   const [instrument, setInstrument] = useState<InstrumentRead | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // New configuration version form states
+  const [showAddConfig, setShowAddConfig] = useState(false)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [cfgClass, setCfgClass] = useState<AccuracyClass>('CLASS_III')
+  const [cfgMax, setCfgMax] = useState('30.000')
+  const [cfgMin, setCfgMin] = useState('0.200')
+  const [cfgE, setCfgE] = useState('0.010')
+  const [cfgD, setCfgD] = useState('0.010')
+  const [cfgUnit, setCfgUnit] = useState('kg')
+  const [cfgIsMulti, setCfgIsMulti] = useState(false)
+  const [cfgTare, setCfgTare] = useState<TareType>('SUBTRACTIVE')
+  const [cfgZero, setCfgZero] = useState(true)
+  const [cfgSupports, setCfgSupports] = useState(4)
+
+  // Multi-range partial ranges
+  const [r1Max, setR1Max] = useState('15.000')
+  const [r1Min, setR1Min] = useState('0.100')
+  const [r1E, setR1E] = useState('0.005')
+  const [r1D, setR1D] = useState('0.005')
+  const [r2Max, setR2Max] = useState('30.000')
+  const [r2Min, setR2Min] = useState('0.200')
+  const [r2E, setR2E] = useState('0.010')
+  const [r2D, setR2D] = useState('0.010')
+
+  async function reload() {
+    if (!instrumentId) return
+    const data = await getInstrument(instrumentId)
+    setInstrument(data)
+  }
+
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const data = await getInstrument(instrumentId)
-      setInstrument(data)
+      await reload()
       setLoading(false)
     }
     if (instrumentId) {
       load()
     }
   }, [instrumentId])
+
+  async function handleSaveConfig(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingConfig(true)
+    setConfigError(null)
+
+    try {
+      const ranges = cfgIsMulti
+        ? [
+            {
+              range_index: 1,
+              min_capacity: r1Min,
+              max_capacity: r1Max,
+              verification_scale_interval: r1E,
+              actual_scale_interval: r1D,
+              unit: cfgUnit,
+            },
+            {
+              range_index: 2,
+              min_capacity: r2Min,
+              max_capacity: r2Max,
+              verification_scale_interval: r2E,
+              actual_scale_interval: r2D,
+              unit: cfgUnit,
+            },
+          ]
+        : undefined
+
+      await createInstrumentConfiguration(instrumentId, {
+        accuracy_class: cfgClass,
+        max_capacity: cfgMax,
+        min_capacity: cfgMin,
+        verification_scale_interval: cfgE,
+        actual_scale_interval: cfgD,
+        unit: cfgUnit,
+        number_of_ranges: cfgIsMulti ? 2 : 1,
+        is_multiple_range: cfgIsMulti,
+        tare_type: cfgTare,
+        is_electronic: true,
+        has_zero_setting: cfgZero,
+        extra_capabilities: {
+          load_receptor: {
+            support_count: cfgSupports,
+            special_receptor: false,
+            rolling_load: false,
+          },
+        },
+        ranges,
+      })
+
+      await reload()
+      setShowAddConfig(false)
+    } catch (err: any) {
+      console.error('Failed to create configuration:', err)
+      setConfigError(err?.data?.detail || err.message || 'Failed to persist configuration')
+    } finally {
+      setSavingConfig(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -100,7 +190,7 @@ export default function InstrumentDetailPage() {
           <h2>
             {instrument.model_name} <Badge tone={instrument.is_synthetic ? 'neutral' : 'lime'}>{instrument.status}</Badge>
           </h2>
-          <p>Registered: {new Date(instrument.created_at).toLocaleDateString()} · Family: {instrument.instrument_family}</p>
+          <p>Registered: {formatDateSafe(instrument.created_at)} · Family: {instrument.instrument_family}</p>
         </div>
         {activeConfig && (
           <>
@@ -241,46 +331,193 @@ export default function InstrumentDetailPage() {
           {/* Configuration History Section */}
           <div className="config-divider" />
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <History style={{ width: '15px', color: 'var(--lime)' }} />
               <span className="eyebrow" style={{ margin: 0 }}>Configuration Audit Trail</span>
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
-              {instrument.configurations?.length || 0} version(s) recorded
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
+                {instrument.configurations?.length || 0} version(s) recorded
+              </span>
+              <button
+                type="button"
+                className="button button-outline"
+                onClick={() => setShowAddConfig(!showAddConfig)}
+                style={{ fontSize: '11px', padding: '6px 12px' }}
+              >
+                <Plus style={{ width: '12px' }} /> {showAddConfig ? 'Cancel' : 'New Configuration Version'}
+              </button>
+            </div>
           </div>
+
+          {/* New Configuration Form */}
+          {showAddConfig && (
+            <form
+              onSubmit={handleSaveConfig}
+              style={{
+                background: '#0d120f',
+                border: '1px solid #536b32',
+                borderRadius: '8px',
+                padding: '18px 20px',
+                marginBottom: '20px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <span className="eyebrow lime-text" style={{ margin: 0 }}>
+                  Create New Metrological Configuration
+                </span>
+                <span style={{ fontSize: '10px', color: 'var(--dim)' }}>Will become new active version</span>
+              </div>
+
+              {configError && (
+                <div style={{ color: '#f87171', fontSize: '11px', marginBottom: '12px' }}>
+                  {configError}
+                </div>
+              )}
+
+              <div className="field-grid" style={{ marginBottom: '14px' }}>
+                <label>
+                  Accuracy Class
+                  <select value={cfgClass} onChange={(e) => setCfgClass(e.target.value as any)}>
+                    <option value="CLASS_I">Class I</option>
+                    <option value="CLASS_II">Class II</option>
+                    <option value="CLASS_III">Class III</option>
+                    <option value="CLASS_IIII">Class IIII</option>
+                  </select>
+                </label>
+                <label>
+                  Unit
+                  <select value={cfgUnit} onChange={(e) => setCfgUnit(e.target.value)}>
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                  </select>
+                </label>
+                <label>
+                  Max Capacity
+                  <input value={cfgMax} onChange={(e) => setCfgMax(e.target.value)} required />
+                </label>
+                <label>
+                  Min Capacity
+                  <input value={cfgMin} onChange={(e) => setCfgMin(e.target.value)} required />
+                </label>
+                <label>
+                  Verification Interval (e)
+                  <input value={cfgE} onChange={(e) => setCfgE(e.target.value)} required />
+                </label>
+                <label>
+                  Actual Interval (d)
+                  <input value={cfgD} onChange={(e) => setCfgD(e.target.value)} required />
+                </label>
+              </div>
+
+              {/* Multiple Range Toggle */}
+              <div className="choice-row" style={{ marginBottom: '14px' }}>
+                <div>
+                  <strong>Multiple Range Capability</strong>
+                  <span style={{ fontSize: '11px', color: 'var(--dim)' }}>
+                    Enable separate partial weighing ranges (Max₁, Max₂) under A.4.4.4.
+                  </span>
+                </div>
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={!cfgIsMulti ? 'selected' : ''}
+                    onClick={() => setCfgIsMulti(false)}
+                  >
+                    Single Range
+                  </button>
+                  <button
+                    type="button"
+                    className={cfgIsMulti ? 'selected' : ''}
+                    onClick={() => setCfgIsMulti(true)}
+                  >
+                    Multiple Range
+                  </button>
+                </div>
+              </div>
+
+              {cfgIsMulti && (
+                <div style={{ background: '#121714', borderRadius: '6px', padding: '12px', marginBottom: '14px', border: '1px solid var(--line)' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--lime)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                    Partial Weighing Ranges Setup (OIML A.4.4.4):
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    <div>
+                      <strong style={{ fontSize: '11px', color: 'var(--warm)' }}>Partial Range 1:</strong>
+                      <div className="field-grid" style={{ marginTop: '6px' }}>
+                        <label>Max₁ <input value={r1Max} onChange={(e) => setR1Max(e.target.value)} /></label>
+                        <label>e₁ <input value={r1E} onChange={(e) => setR1E(e.target.value)} /></label>
+                      </div>
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '11px', color: 'var(--warm)' }}>Partial Range 2:</strong>
+                      <div className="field-grid" style={{ marginTop: '6px' }}>
+                        <label>Max₂ <input value={r2Max} onChange={(e) => setR2Max(e.target.value)} /></label>
+                        <label>e₂ <input value={r2E} onChange={(e) => setR2E(e.target.value)} /></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="button"
+                disabled={savingConfig}
+                style={{ width: '100%', justifyContent: 'center', fontSize: '11px', padding: '10px' }}
+              >
+                {savingConfig ? 'Persisting Configuration Version...' : 'Save & Persist Configuration Version'}
+              </button>
+            </form>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {(instrument.configurations || []).map((cfg, idx) => (
               <div
                 key={cfg.id}
                 style={{
-                  padding: '12px 16px',
+                  padding: '14px 16px',
                   background: idx === 0 ? 'rgba(182, 237, 78, 0.04)' : '#0b0e0c',
                   border: `1px solid ${idx === 0 ? 'rgba(182, 237, 78, 0.2)' : 'var(--line)'}`,
                   borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
                   fontSize: '11px',
                 }}
               >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                <div style={{ flex: 1, minWidth: '220px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <strong style={{ color: idx === 0 ? 'var(--lime)' : 'var(--ink)' }}>
                       Configuration #{cfg.id.slice(0, 8)}
                     </strong>
                     {idx === 0 && <Badge tone="lime">Active</Badge>}
+                    <Badge tone={cfg.is_multiple_range ? 'lime' : 'neutral'}>
+                      {cfg.is_multiple_range ? 'Multi-Range' : 'Single Range'}
+                    </Badge>
                   </div>
-                  <span style={{ color: 'var(--dim)' }}>
+                  <span style={{ color: 'var(--dim)', display: 'block', fontSize: '11px' }}>
                     Max: {cfg.max_capacity} {cfg.unit} · e: {cfg.verification_scale_interval} {cfg.unit} ·{' '}
-                    {cfg.accuracy_class} · {cfg.is_multiple_range ? 'Multi-Range' : 'Single Range'}
+                    Class: {cfg.accuracy_class.replace('_', ' ')}
                   </span>
                 </div>
-                <div style={{ textAlign: 'right', color: 'var(--dim)', fontSize: '10px' }}>
-                  <Clock style={{ width: '11px', display: 'inline', marginRight: '4px' }} />
-                  {new Date(cfg.created_at).toLocaleDateString()}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ textAlign: 'right', color: 'var(--dim)', fontSize: '10px' }}>
+                    <Clock style={{ width: '11px', display: 'inline', marginRight: '4px' }} />
+                    {formatDateSafe(cfg.created_at)}
+                  </div>
+                  <Link
+                    href={`/evaluations/new?instrumentId=${instrument.id}&configId=${cfg.id}`}
+                    className="button button-secondary"
+                    style={{ padding: '6px 12px', fontSize: '11px' }}
+                    title="Launch new evaluation using this specific configuration snapshot"
+                  >
+                    Evaluate this version <ArrowRight style={{ width: '11px' }} />
+                  </Link>
                 </div>
               </div>
             ))}

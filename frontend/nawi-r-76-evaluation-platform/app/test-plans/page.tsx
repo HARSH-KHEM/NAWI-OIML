@@ -1,23 +1,59 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
   Check,
   CircleHelp,
   ClipboardCheck,
+  RefreshCw,
   Search,
   TestTube2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { TestDefinitionRead } from '@/lib/types/domain'
+import { getTestDefinitions } from '@/lib/api/services'
 import { CANONICAL_PROCEDURES } from '@/lib/mock-data'
 
 export default function TestPlansPage() {
+  const [definitions, setDefinitions] = useState<TestDefinitionRead[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeWhy, setActiveWhy] = useState<string | null>(null)
 
-  const filteredProcedures = CANONICAL_PROCEDURES.filter(
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const list = await getTestDefinitions()
+        if (list && list.length > 0) {
+          setDefinitions(list)
+        }
+      } catch (err) {
+        console.warn('Error loading test definitions:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // Map backend definitions or fallback to canonical procedures
+  const items = definitions.length > 0
+    ? definitions.map((d) => ({
+        id: d.id,
+        code: d.test_code,
+        name: d.title,
+        r76Ref: d.r76_reference,
+        scope: d.scope_type,
+        status: d.is_active ? 'IMPLEMENTED' : 'APPLICABILITY_ONLY',
+        description: d.description || 'OIML R 76-1:2006 test procedure',
+        whyApplicable: `Governed by Clause ${d.r76_reference}. Mandatory applicability determined by instrument metrological parameters and capabilities.`,
+      }))
+    : CANONICAL_PROCEDURES
+
+  const filtered = items.filter(
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -39,7 +75,7 @@ export default function TestPlansPage() {
         </div>
         <div className="header-actions">
           <Link href="/evaluations/new" className="button">
-            Configure evaluation <ArrowRight />
+            Configure evaluation <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
       </div>
@@ -58,97 +94,104 @@ export default function TestPlansPage() {
         </div>
       </div>
 
-      {/* Procedures Table */}
-      <div className="panel" style={{ padding: '0', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1.5fr 1fr 1fr 1fr auto', padding: '14px 24px', borderBottom: '1px solid var(--line)', color: 'var(--dim)', font: '9px ui-monospace, SFMono-Regular, monospace', letterSpacing: '0.08em' }}>
-          <span>CLAUSE</span>
-          <span>PROCEDURE NAME</span>
-          <span>SCOPE</span>
-          <span>STATUS</span>
-          <span>APPLICABILITY TRIGGER</span>
-          <span style={{ textAlign: 'right' }}>INFO</span>
+      {loading ? (
+        <div className="panel" style={{ padding: '48px', textAlign: 'center' }}>
+          <RefreshCw className="animate-spin" style={{ width: '24px', margin: '0 auto 12px', color: 'var(--lime)' }} />
+          <p style={{ color: 'var(--muted)', fontSize: '12px' }}>Loading R-76 procedure catalog...</p>
         </div>
+      ) : (
+        /* Procedures Table */
+        <div className="panel" style={{ padding: '0', overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1.5fr 1fr 1fr 1fr auto', padding: '14px 24px', borderBottom: '1px solid var(--line)', color: 'var(--dim)', font: '9px ui-monospace, SFMono-Regular, monospace', letterSpacing: '0.08em' }}>
+            <span>CLAUSE</span>
+            <span>PROCEDURE NAME</span>
+            <span>SCOPE</span>
+            <span>STATUS</span>
+            <span>APPLICABILITY TRIGGER</span>
+            <span style={{ textAlign: 'right' }}>INFO</span>
+          </div>
 
-        {filteredProcedures.map((proc) => {
-          const isWhyOpen = activeWhy === proc.id
+          {filtered.map((proc) => {
+            const isWhyOpen = activeWhy === proc.id
 
-          return (
-            <div
-              key={proc.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '80px 1.5fr 1fr 1fr 1fr auto',
-                alignItems: 'center',
-                padding: '20px 24px',
-                borderBottom: '1px solid var(--line)',
-                gap: '12px',
-                position: 'relative',
-              }}
-            >
-              <div>
-                <strong style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12px', color: 'var(--lime)' }}>
-                  {proc.r76Ref}
-                </strong>
-              </div>
-
-              <div>
-                <strong style={{ fontSize: '13px', color: 'var(--warm)', display: 'block' }}>
-                  {proc.name}
-                </strong>
-                <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
-                  {proc.code}
-                </span>
-              </div>
-
-              <div>
-                <Badge tone={proc.scope === 'RANGE' ? 'lime' : 'neutral'}>
-                  {proc.scope}
-                </Badge>
-              </div>
-
-              <div>
-                <Badge tone={proc.status === 'IMPLEMENTED' ? 'lime' : proc.status === 'PARTIAL' ? 'amber' : 'neutral'}>
-                  {proc.status}
-                </Badge>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', maxWidth: '320px' }}>
-                  {proc.description}
-                </span>
-              </div>
-
-              <div style={{ textAlign: 'right' }}>
-                <button
-                  type="button"
-                  className="why"
-                  onClick={() => setActiveWhy(!isWhyOpen ? proc.id : null)}
-                  aria-label={`Why is ${proc.name} applicable?`}
-                  title="Inspect R-76 applicability rule"
-                >
-                  <CircleHelp style={{ width: '16px' }} />
-                </button>
-              </div>
-
-              {isWhyOpen && (
-                <div
-                  className="why-detail"
-                  style={{
-                    gridColumn: '1 / -1',
-                    position: 'static',
-                    margin: '10px 0 4px',
-                  }}
-                >
-                  <span>AUTHORITATIVE R-76 APPLICABILITY RULE</span>
-                  <p>
-                    <strong>Clause {proc.r76Ref}:</strong> {proc.whyApplicable}
-                  </p>
+            return (
+              <div
+                key={proc.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '80px 1.5fr 1fr 1fr 1fr auto',
+                  alignItems: 'center',
+                  padding: '20px 24px',
+                  borderBottom: '1px solid var(--line)',
+                  gap: '12px',
+                  position: 'relative',
+                }}
+              >
+                <div>
+                  <strong style={{ fontFamily: 'ui-monospace, monospace', fontSize: '12px', color: 'var(--lime)' }}>
+                    {proc.r76Ref}
+                  </strong>
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+
+                <div>
+                  <strong style={{ fontSize: '13px', color: 'var(--warm)', display: 'block' }}>
+                    {proc.name}
+                  </strong>
+                  <span style={{ fontSize: '11px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
+                    {proc.code}
+                  </span>
+                </div>
+
+                <div>
+                  <Badge tone={proc.scope === 'RANGE' ? 'lime' : 'neutral'}>
+                    {proc.scope}
+                  </Badge>
+                </div>
+
+                <div>
+                  <Badge tone={proc.status === 'IMPLEMENTED' ? 'lime' : 'neutral'}>
+                    {proc.status}
+                  </Badge>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', maxWidth: '320px' }}>
+                    {proc.description}
+                  </span>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    className="why"
+                    onClick={() => setActiveWhy(isWhyOpen ? null : proc.id)}
+                    aria-label={`Why is ${proc.name} applicable?`}
+                    title="Inspect R-76 applicability rule"
+                  >
+                    <CircleHelp style={{ width: '16px' }} />
+                  </button>
+                </div>
+
+                {isWhyOpen && (
+                  <div
+                    className="why-detail"
+                    style={{
+                      gridColumn: '1 / -1',
+                      position: 'static',
+                      margin: '10px 0 4px',
+                    }}
+                  >
+                    <span>AUTHORITATIVE R-76 APPLICABILITY RULE</span>
+                    <p>
+                      <strong>Clause {proc.r76Ref}:</strong> {proc.whyApplicable}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -277,3 +277,68 @@ export interface EvaluationPlanResponse {
   applicable_tests_count: number
 }
 
+export interface ProcedureReportItem {
+  id: string
+  test_code: string
+  title: string
+  r76_reference: string
+  status: EvaluationTestStatus | string
+  scope_type: ScopeType | string
+  range_reference?: string
+  applicability_reason?: string
+  implementation_status: ImplementationStatus | string
+  attempt_count: number
+  latest_decision?: ComplianceDecision | string
+  calculated_error?: string
+  mpe_limit?: string
+  margin?: string
+}
+
+export interface EvaluationReportRead {
+  evaluation_id: string
+  evaluation_number: string
+  status: EvaluationStatus | string
+  instrument_id: string
+  instrument_manufacturer: string
+  instrument_model: string
+  instrument_serial: string
+  accuracy_class: AccuracyClass | string
+  max_capacity: string
+  min_capacity: string
+  verification_scale_interval: string
+  actual_scale_interval: string
+  unit: string
+  is_multiple_range: boolean
+  number_of_ranges: number
+  tare_type: TareType | string
+  standard_name: string
+  rule_version: string
+  lab_name?: string
+  operator_name?: string
+  created_at: string
+  completed_at?: string
+  total_procedures: number
+  applicable_procedures: number
+  executed_procedures: number
+  passed_procedures: number
+  failed_procedures: number
+  overall_compliance: 'PASS' | 'FAIL' | 'IN_PROGRESS' | string
+  document_hash: string
+  compliance_statement: string
+  procedures: ProcedureReportItem[]
+  configuration_snapshot: ConfigurationSnapshot
+}
+
+export interface TestDefinitionRead {
+  id: string
+  test_code: string
+  title: string
+  r76_reference: string
+  description?: string
+  implementation_status: ImplementationStatus
+  scope_type: ScopeType
+  sequence: number
+  is_active: boolean
+}
+
+

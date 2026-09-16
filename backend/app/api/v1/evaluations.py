@@ -1,7 +1,7 @@
 """Evaluation and test plan REST API endpoints."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -14,9 +14,10 @@ from app.models.instrument import Instrument
 from app.models.metrology import AuditEvent
 from app.models.rule import RuleVersion
 from app.models.test_execution import EvaluationTest, EvaluationTestStatus
-from app.schemas.evaluation import EvaluationCreate, EvaluationPlanResponse, EvaluationRead
+from app.schemas.evaluation import EvaluationCreate, EvaluationPlanResponse, EvaluationRead, EvaluationReportResponse
 from app.schemas.test_execution import EvaluationTestRead
 from app.services.plan_service import generate_evaluation_plan
+from app.services.report_service import generate_evaluation_report
 
 router = APIRouter(tags=["Evaluations"])
 
@@ -253,3 +254,16 @@ def list_evaluation_tests(
     ).all()
 
     return [_to_test_read(t) for t in tests]
+
+
+@router.get("/evaluations/{evaluation_id}/report", response_model=EvaluationReportResponse)
+def get_evaluation_report_endpoint(
+    evaluation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Retrieve an authoritative OIML R-76 technical evaluation report."""
+    try:
+        return generate_evaluation_report(db, evaluation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+

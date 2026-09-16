@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -32,8 +32,13 @@ export default function RegisterInstrumentPage() {
   const [manufacturer, setManufacturer] = useState('Global Bench Metrology Systems')
   const [modelName, setModelName] = useState('ABC-500 Heavy Industrial Scale')
   const [instrumentFamily, setInstrumentFamily] = useState('NAWI')
-  const [serialNumber, setSerialNumber] = useState(`SN-${Math.floor(100000 + Math.random() * 900000)}`)
+  const [serialNumber, setSerialNumber] = useState('SN-2026-001')
   const [isSynthetic, setIsSynthetic] = useState(false)
+
+  useEffect(() => {
+    // Randomize serial number only on client mount to avoid SSR hydration mismatch
+    setSerialNumber(`SN-${Math.floor(100000 + Math.random() * 900000)}`)
+  }, [])
 
   // Step 2: Metrological Parameters
   const [accuracyClass, setAccuracyClass] = useState<AccuracyClass>('CLASS_III')

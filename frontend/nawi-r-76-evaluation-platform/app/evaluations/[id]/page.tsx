@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
@@ -10,23 +10,104 @@ import {
   Gauge,
   GitBranch,
   Play,
+  RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
   TestTube2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Pipeline } from '@/components/layout/pipeline'
+import { EvaluationRead, EvaluationPlanResponse } from '@/lib/types/domain'
+import { getEvaluation, getEvaluationPlan, getEvaluationTests } from '@/lib/api/services'
 import { MOCK_EVALUATIONS } from '@/lib/mock-data'
 
 export default function EvaluationDetailPage() {
   const params = useParams()
   const evaluationId = (params?.id as string) || 'EV-2026-001'
 
-  const evaluation =
-    MOCK_EVALUATIONS.find((e) => e.id === evaluationId || e.evaluationNumber === evaluationId) ||
-    MOCK_EVALUATIONS[0]
+  const [evaluation, setEvaluation] = useState<EvaluationRead | null>(null)
+  const [plan, setPlan] = useState<EvaluationPlanResponse | null>(null)
+  const [firstTestId, setFirstTestId] = useState<string>('test-wp-01')
+  const [loading, setLoading] = useState(true)
 
-  const inst = evaluation.instrument
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true)
+      try {
+        const evalData = await getEvaluation(evaluationId)
+        if (evalData) {
+          setEvaluation(evalData)
+        } else {
+          // Fallback mock
+          const mock =
+            MOCK_EVALUATIONS.find((e) => e.id === evaluationId || e.evaluationNumber === evaluationId) ||
+            MOCK_EVALUATIONS[0]
+          setEvaluation({
+            id: mock.id,
+            evaluation_number: mock.evaluationNumber,
+            instrument_id: mock.instrument.id,
+            instrument_configuration_id: `cfg-${mock.instrument.id}`,
+            rule_version_id: mock.ruleVersion,
+            configuration_snapshot: {
+              accuracy_class: mock.instrument.accuracyClass,
+              max_capacity: String(mock.instrument.maxCapacity),
+              min_capacity: String(mock.instrument.minCapacity),
+              verification_scale_interval: String(mock.instrument.verificationScaleInterval),
+              actual_scale_interval: String(mock.instrument.actualScaleInterval),
+              unit: mock.instrument.unit,
+              number_of_ranges: mock.instrument.numberOfRanges,
+              is_multiple_range: mock.instrument.isMultipleRange,
+              tare_type: mock.instrument.tareType,
+              is_electronic: mock.instrument.isElectronic,
+              has_zero_setting: mock.instrument.hasZeroSetting,
+              extra_capabilities: {},
+              snapshot_timestamp: mock.createdAt,
+              instrument_serial: mock.instrument.serialNumber,
+              manufacturer: mock.instrument.manufacturer,
+              model_name: mock.instrument.modelName,
+            },
+            status: mock.status as any,
+            lab_name: mock.labName,
+            created_at: mock.createdAt,
+          })
+        }
+
+        // Fetch plan and tests
+        const [planData, tests] = await Promise.all([
+          getEvaluationPlan(evaluationId),
+          getEvaluationTests(evaluationId),
+        ])
+
+        if (planData) {
+          setPlan(planData)
+          if (planData.tests && planData.tests.length > 0) {
+            setFirstTestId(planData.tests[0].id)
+          }
+        } else if (tests && tests.length > 0) {
+          setFirstTestId(tests[0].id)
+        }
+      } catch (err) {
+        console.warn('Failed to load evaluation details:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [evaluationId])
+
+  if (loading || !evaluation) {
+    return (
+      <div className="content" style={{ maxWidth: '1480px', margin: '0 auto', padding: '80px 42px', textAlign: 'center' }}>
+        <RefreshCw className="animate-spin" style={{ width: '28px', margin: '0 auto 16px', color: 'var(--lime)' }} />
+        <p style={{ color: 'var(--muted)', fontSize: '13px' }}>Loading evaluation hub...</p>
+      </div>
+    )
+  }
+
+  const snap = evaluation.configuration_snapshot
+  const isMulti = snap.is_multiple_range
+  const totalProcedures = plan?.total_tests || (isMulti ? 10 : 9)
+  const applicableProcedures = plan?.applicable_tests_count || (isMulti ? 6 : 4)
 
   return (
     <div className="content" style={{ maxWidth: '1480px', margin: '0 auto', padding: '42px 42px 90px' }}>
@@ -37,16 +118,16 @@ export default function EvaluationDetailPage() {
       <div className="page-header">
         <div>
           <div className="eyebrow">
-            <span>{evaluation.evaluationNumber}</span>Type Evaluation Hub
+            <span>{evaluation.evaluation_number}</span>Type Evaluation Hub
           </div>
-          <h1>{inst.modelName}</h1>
+          <h1>{snap.model_name || 'Weighing Instrument'}</h1>
           <p>
-            {inst.manufacturer} · Standard: {evaluation.ruleVersion} · Registered by {evaluation.operatorName}
+            {snap.manufacturer} · Standard: {evaluation.rule_version_id || 'OIML R 76-1:2006'} · Laboratory: {evaluation.lab_name || 'Legal Metrology Lab'}
           </p>
         </div>
         <div className="header-actions">
           <Link href={`/evaluations/${evaluation.id}/plan`} className="button">
-            View generated test plan <ArrowRight />
+            View generated test plan <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
       </div>
@@ -57,23 +138,26 @@ export default function EvaluationDetailPage() {
           <Gauge />
         </div>
         <div>
-          <span className="eyebrow">Frozen Snapshot / {inst.serialNumber}</span>
+          <span className="eyebrow">Frozen Snapshot / {snap.instrument_serial}</span>
           <h2>
-            {inst.modelName} <Badge tone={evaluation.status === 'COMPLIANT' ? 'lime' : 'amber'}>{evaluation.status}</Badge>
+            {snap.model_name} <Badge tone={evaluation.status === 'COMPLIANT' ? 'lime' : evaluation.status === 'NON_COMPLIANT' ? 'red' : 'amber'}>{evaluation.status}</Badge>
           </h2>
-          <p>Non-automatic weighing instrument · {inst.accuracyClass.replace('_', ' ')}</p>
+          <p>
+            Non-automatic weighing instrument · {snap.accuracy_class?.replace('_', ' ')} ·{' '}
+            {isMulti ? `Multiple Range (${snap.ranges?.length || 2} ranges)` : 'Single Range'}
+          </p>
         </div>
         <div className="strip-spec">
           <span>Max Capacity</span>
-          <strong>{inst.maxCapacity} {inst.unit}</strong>
+          <strong>{snap.max_capacity} {snap.unit}</strong>
         </div>
         <div className="strip-spec">
           <span>Min Capacity</span>
-          <strong>{inst.minCapacity} {inst.unit}</strong>
+          <strong>{snap.min_capacity} {snap.unit}</strong>
         </div>
         <div className="strip-spec">
           <span>Scale Interval (e)</span>
-          <strong>{inst.verificationScaleInterval} {inst.unit}</strong>
+          <strong>{snap.verification_scale_interval} {snap.unit}</strong>
         </div>
       </div>
 
@@ -92,7 +176,7 @@ export default function EvaluationDetailPage() {
             Inspect frozen metrological parameters, tare mechanism, zero setting, and receptor geometry.
           </p>
           <Link href={`/evaluations/${evaluation.id}/configuration`} className="button button-secondary" style={{ marginTop: 'auto' }}>
-            Inspect configuration <ArrowRight />
+            Inspect configuration <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
 
@@ -106,10 +190,10 @@ export default function EvaluationDetailPage() {
             Applicable Test Plan
           </h3>
           <p style={{ color: 'var(--muted)', fontSize: '12px', lineHeight: 1.5, margin: '0 0 20px' }}>
-            {evaluation.totalProcedures} rule-derived procedures scheduled based on instrument configuration.
+            {applicableProcedures} rule-derived procedures scheduled based on instrument configuration.
           </p>
           <Link href={`/evaluations/${evaluation.id}/plan`} className="button button-secondary" style={{ marginTop: 'auto' }}>
-            Open test schedule <ArrowRight />
+            Open test schedule <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
 
@@ -125,8 +209,8 @@ export default function EvaluationDetailPage() {
           <p style={{ color: 'var(--muted)', fontSize: '12px', lineHeight: 1.5, margin: '0 0 20px' }}>
             Record laboratory observations (Load, Indication, ΔL, Zero Error) with real-time validation.
           </p>
-          <Link href={`/evaluations/${evaluation.id}/tests/test-wp-01`} className="button" style={{ marginTop: 'auto' }}>
-            Enter test workspace <Play />
+          <Link href={`/evaluations/${evaluation.id}/tests/${firstTestId}`} className="button" style={{ marginTop: 'auto' }}>
+            Enter test workspace <Play style={{ width: '13px' }} />
           </Link>
         </div>
 
@@ -143,7 +227,7 @@ export default function EvaluationDetailPage() {
             Deterministic evaluation against OIML R 76 Table 6 maximum permissible errors.
           </p>
           <Link href={`/evaluations/${evaluation.id}/compliance`} className="button button-secondary" style={{ marginTop: 'auto' }}>
-            View calculations <ArrowRight />
+            View calculations <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
 
@@ -160,7 +244,7 @@ export default function EvaluationDetailPage() {
             Explainable audit chain connecting final decisions to raw observations and rule clauses.
           </p>
           <Link href={`/evaluations/${evaluation.id}/evidence`} className="button button-secondary" style={{ marginTop: 'auto' }}>
-            Explore trace graph <ArrowRight />
+            Explore trace graph <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
 
@@ -177,7 +261,7 @@ export default function EvaluationDetailPage() {
             Structured evaluation certificate ready for regulatory handoff and PDF export.
           </p>
           <Link href={`/evaluations/${evaluation.id}/report`} className="button button-secondary" style={{ marginTop: 'auto' }}>
-            Preview technical report <ArrowRight />
+            Preview technical report <ArrowRight style={{ width: '13px' }} />
           </Link>
         </div>
       </div>

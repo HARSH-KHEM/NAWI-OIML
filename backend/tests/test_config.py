@@ -7,6 +7,7 @@ from app.core.config import Settings
 def test_default_settings():
     """Verify default settings instantiation and property computation."""
     cfg = Settings(
+        DATABASE_URL=None,
         POSTGRES_SERVER="db.metrology.internal",
         POSTGRES_PORT=5432,
         POSTGRES_USER="test_user",

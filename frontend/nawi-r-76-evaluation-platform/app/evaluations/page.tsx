@@ -14,7 +14,8 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { EvaluationRead } from '@/lib/types/domain'
-import { getEvaluations } from '@/lib/api/services'
+import { getEvaluations, getEvaluationReport } from '@/lib/api/services'
+import { formatDateSafe } from '@/lib/utils'
 import { MOCK_EVALUATIONS } from '@/lib/mock-data'
 
 export default function EvaluationsPage() {
@@ -28,26 +29,28 @@ export default function EvaluationsPage() {
       setLoading(true)
       const data = await getEvaluations()
       if (data && data.length > 0) {
-        // Map backend EvaluationRead
-        const mapped = data.map((ev) => {
-          const snap = ev.configuration_snapshot
-          return {
-            id: ev.id,
-            evaluationNumber: ev.evaluation_number,
-            modelName: snap?.model_name || 'NAWI Scale',
-            manufacturer: snap?.manufacturer || 'Unknown',
-            serialNumber: snap?.instrument_serial || 'SN-UNKNOWN',
-            accuracyClass: snap?.accuracy_class || 'CLASS_III',
-            maxCapacity: snap?.max_capacity || '30.000',
-            unit: snap?.unit || 'kg',
-            isMultipleRange: snap?.is_multiple_range ?? false,
-            status: ev.status,
-            createdAt: ev.created_at,
-            totalProcedures: snap?.is_multiple_range ? 10 : 9,
-            passedProcedures: ev.status === 'COMPLIANT' ? (snap?.is_multiple_range ? 10 : 9) : 0,
-            isSynthetic: true,
-          }
-        })
+        const mapped = await Promise.all(
+          data.map(async (ev) => {
+            const snap = ev.configuration_snapshot
+            const rep = await getEvaluationReport(ev.id)
+            return {
+              id: ev.id,
+              evaluationNumber: ev.evaluation_number,
+              modelName: snap?.model_name || 'NAWI Scale',
+              manufacturer: snap?.manufacturer || 'Unknown',
+              serialNumber: snap?.instrument_serial || 'SN-UNKNOWN',
+              accuracyClass: snap?.accuracy_class || 'CLASS_III',
+              maxCapacity: snap?.max_capacity || '30.000',
+              unit: snap?.unit || 'kg',
+              isMultipleRange: snap?.is_multiple_range ?? false,
+              status: rep?.overall_compliance === 'PASS' ? 'COMPLIANT' : ev.status,
+              createdAt: ev.created_at,
+              totalProcedures: rep?.total_procedures ?? (snap?.is_multiple_range ? 10 : 9),
+              passedProcedures: rep?.passed_procedures ?? (ev.status === 'COMPLIANT' ? 1 : 0),
+              isSynthetic: true,
+            }
+          })
+        )
         setEvaluations(mapped)
       } else {
         // Fallback to mock evaluations
@@ -227,7 +230,7 @@ export default function EvaluationsPage() {
                   {ev.evaluationNumber}
                 </strong>
                 <small style={{ color: 'var(--dim)', fontSize: '9px', fontFamily: 'ui-monospace, monospace' }}>
-                  {new Date(ev.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {formatDateSafe(ev.createdAt)}
                 </small>
               </div>
 

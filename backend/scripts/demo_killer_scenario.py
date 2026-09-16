@@ -20,6 +20,7 @@ Demonstrates:
 from decimal import Decimal
 import json
 import sys
+import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -205,15 +206,17 @@ def run_killer_demo():
 
     # Audit check: verify Attempt 1 was NOT overwritten
     with SessionLocal() as db:
-        att1_db = db.get(TestAttempt, attempt1_id)
+        att1_uuid = uuid.UUID(attempt1_id)
+        att2_uuid = uuid.UUID(attempt2_id)
+        att1_db = db.get(TestAttempt, att1_uuid)
         assert att1_db is not None
-        comp1_db = db.scalar(select(ComplianceResult).where(ComplianceResult.test_attempt_id == attempt1_id))
+        comp1_db = db.scalar(select(ComplianceResult).where(ComplianceResult.test_attempt_id == att1_uuid))
         assert comp1_db is not None
         assert comp1_db.decision == ComplianceDecision.FAIL
 
-        att2_db = db.get(TestAttempt, attempt2_id)
+        att2_db = db.get(TestAttempt, att2_uuid)
         assert att2_db is not None
-        comp2_db = db.scalar(select(ComplianceResult).where(ComplianceResult.test_attempt_id == attempt2_id))
+        comp2_db = db.scalar(select(ComplianceResult).where(ComplianceResult.test_attempt_id == att2_uuid))
         assert comp2_db is not None
         assert comp2_db.decision == ComplianceDecision.PASS
 
